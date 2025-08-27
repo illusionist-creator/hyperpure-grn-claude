@@ -130,25 +130,46 @@ HARDCODED_CONFIG = {
 
 def get_credentials_path():
     """Get credentials path based on deployment environment"""
-    if 'STREAMLIT_SHARING' in os.environ or 'STREAMLIT_CLOUD' in os.environ:
-        try:
-            credentials_dict = st.secrets["google_credentials"]
-            credentials_dict = dict(credentials_dict)
+    try:
+        # Check if OAuth credentials are in Streamlit secrets
+        if "web" in st.secrets or "installed" in st.secrets:
+            # Create OAuth credentials from secrets
+            credentials_dict = {}
+            
+            # Check for web type (for web applications)
+            if "web" in st.secrets:
+                credentials_dict["web"] = dict(st.secrets["web"])
+            
+            # Check for installed type (for desktop applications)
+            if "installed" in st.secrets:
+                credentials_dict["installed"] = dict(st.secrets["installed"])
+            
+            # Create temporary file with the credentials
+            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+            json.dump(credentials_dict, temp_file, indent=2)
+            temp_file.close()
+            return temp_file.name
+            
+        # Check for the old format (direct google_credentials)
+        elif "google_credentials" in st.secrets:
+            credentials_dict = dict(st.secrets["google_credentials"])
             
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
             json.dump(credentials_dict, temp_file, indent=2)
             temp_file.close()
             return temp_file.name
-        except Exception as e:
-            st.error(f"Failed to load credentials from Streamlit secrets: {str(e)}")
-            return None
+            
+    except Exception as e:
+        st.error(f"Failed to load credentials from Streamlit secrets: {str(e)}")
+        return None
+
+    # Fallback to local file for development
+    local_path = 'D:\\GRN\\PDF\\zhplgm\\credentials.json'
+    if os.path.exists(local_path):
+        return local_path
     else:
-        local_path = 'D:\\GRN\\PDF\\zhplgrn\\credentials.json'
-        if os.path.exists(local_path):
-            return local_path
-        else:
-            st.error(f"Credentials file not found at: {local_path}")
-            return None
+        st.error(f"Credentials file not found at: {local_path}")
+        return None
 
 def load_existing_token() -> Optional[Credentials]:
     """Load existing token from file"""
@@ -187,21 +208,49 @@ def create_auth_flow():
             'https://www.googleapis.com/auth/spreadsheets'
         ]
         
-        flow = InstalledAppFlow.from_client_secrets_file(credentials_path, scopes)
+        # Determine the application type from credentials
+        with open(credentials_path, 'r') as f:
+            creds_data = json.load(f)
         
-        # Use localhost redirect for local development
-        # For production, you'd use your actual domain
-        if 'localhost' in st.get_option('server.address') or st.get_option('server.address') == '0.0.0.0':
-            flow.redirect_uri = f"http://localhost:{st.get_option('server.port')}/oauth2callback"
+        # Check if it's a web application
+        if 'web' in creds_data:
+            client_config = creds_data['web']
+            # For web apps, we need to set the redirect URI properly
+            if 'STREAMLIT_SHARING' in os.environ or 'STREAMLIT_CLOUD' in os.environ:
+                # For Streamlit Cloud, use the actual redirect URI
+                redirect_uri = f"https://{st.get_option('server.address')}/oauth2callback"
+            else:
+                # For local development, use localhost
+                redirect_uri = f"http://localhost:{st.get_option('server.port')}/oauth2callback"
+            
+            # Create flow from client config
+            flow = InstalledAppFlow.from_client_config(
+                creds_data,  # Pass the entire credentials data
+                scopes=scopes,
+                redirect_uri=redirect_uri
+            )
+            
+        # Check if it's an installed application
+        elif 'installed' in creds_data:
+            # For installed apps, use the standard flow
+            flow = InstalledAppFlow.from_client_secrets_file(credentials_path, scopes)
+            
+            # Set redirect URI based on environment
+            if 'STREAMLIT_SHARING' in os.environ or 'STREAMLIT_CLOUD' in os.environ:
+                flow.redirect_uri = f"https://{st.get_option('server.address')}/oauth2callback"
+            else:
+                flow.redirect_uri = f"http://localhost:{st.get_option('server.port')}/oauth2callback"
+                
         else:
-            # For Streamlit Cloud or custom domain
-            flow.redirect_uri = f"https://{st.get_option('server.address')}/oauth2callback"
+            st.error("Invalid credentials format. Must be either 'web' or 'installed' type.")
+            return None
         
         return flow
+        
     except Exception as e:
         st.error(f"Failed to create OAuth flow: {str(e)}")
         return None
-
+    
 def authenticate_with_manual_code():
     """Alternative authentication method using manual code entry"""
     st.markdown("### Manual Authentication")
