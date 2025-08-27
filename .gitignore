@@ -1,0 +1,25 @@
+# Credentials and tokens - NEVER commit these
+credentials.json
+token_*.json
+tokens/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
