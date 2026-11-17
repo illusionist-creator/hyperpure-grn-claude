@@ -112,6 +112,15 @@ if 'flow' not in st.session_state:
     st.session_state.flow = None
 
 # App configuration - Hardcoded values
+def _secret(name: str) -> str:
+    """Read a key from Streamlit secrets (Streamlit Cloud: app settings -> Secrets) or the environment."""
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        pass
+    return os.environ.get(name, "")
+
 HARDCODED_CONFIG = {
     'gmail': {
         'sender': 'noreply@hyperpure.com',
@@ -121,7 +130,7 @@ HARDCODED_CONFIG = {
     },
     'sheets': {
         'drive_folder_id': '1aUjRMqWjVDDAsQw0TugwgmwYjxP6W7DT',
-        'llama_api_key': 'llx-ZBUTlOe0JLY3ny0FSs5mSJTMgOZU7RV3x3TGyQPNQQ0XPhyO',
+        'llama_api_key': _secret('LLAMA_CLOUD_API_KEY'),
         'llama_agent': 'Hyperpure Agent',
         'spreadsheet_id': '1B1C2ILnIMXpEYbQzaSkhRzEP2gmgE2YLRNqoX98GwcU',
         'sheet_range': 'hyperpuregrn'
